@@ -9,28 +9,28 @@ RUN apt-get update -y &&  \
     curl -LsSf https://astral.sh/uv/install.sh | sh && \
     mv /root/.local/bin/uv /usr/local/bin/ && \
     mv /root/.local/bin/uvx /usr/local/bin/ && \
-    useradd -m -u 1001 appuser && \
     mkdir -p /app/api/src/models/v1_0 && \
-    chown -R appuser:appuser /app
 
 # ✅ --- OpenShift fix: allow arbitrary UIDs to read/execute ---
 RUN chgrp -R 0 /app && chmod -R g=u /app
 
-USER appuser
 WORKDIR /app
 
 # Copy dependency files
-COPY --chown=appuser:appuser pyproject.toml ./pyproject.toml
+COPY pyproject.toml ./pyproject.toml
 
 # Install dependencies with GPU extras
 RUN uv venv --python 3.10 && \
     uv sync --extra gpu --no-cache
 
 # Copy project files including models
-COPY --chown=appuser:appuser api ./api
-COPY --chown=appuser:appuser web ./web
-COPY --chown=appuser:appuser docker/scripts/ ./
+COPY api ./api
+COPY web ./web
+COPY docker/scripts/ ./
 RUN chmod +x ./entrypoint.sh
+
+# Re-apply group perms after COPY (since --chown was removed)
+RUN chgrp -R 0 /app && chmod -R g=u /app
 
 # Set all environment variables in one go
 ENV PATH="/app/.venv/bin:$PATH" \

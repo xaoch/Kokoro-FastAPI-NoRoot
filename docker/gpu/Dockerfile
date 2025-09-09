@@ -10,7 +10,7 @@ RUN apt-get update -y &&  \
     mv /root/.local/bin/uv /usr/local/bin/ && \
     mv /root/.local/bin/uvx /usr/local/bin/ && \
     mkdir -p /app/api/src/models/v1_0 && \
-    && chgrp -R 0 /app && chmod -R g=u /app
+    chgrp -R 0 /app && chmod -R g=u /app
 
 WORKDIR /app
 

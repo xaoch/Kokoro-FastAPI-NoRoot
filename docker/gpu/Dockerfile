@@ -1,4 +1,4 @@
-FROM registry.cloud.rt.nyu.edu/sw77/cuda
+FROM registry.cloud.rt.nyu.edu/sw77/cuda:12.6.3-ubuntu-22.04-20250103
 
 # Install Python and other dependencies
 RUN apt-get update -y &&  \

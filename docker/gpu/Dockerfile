@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM registry.cloud.rt.nyu.edu/sw77/cuda
+FROM registry.cloud.rt.nyu.edu/sw77/cuda
 
 # Install Python and other dependencies
 RUN apt-get update -y &&  \

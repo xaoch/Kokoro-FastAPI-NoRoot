@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM nvidia/cuda:12.8.1-base-ubuntu24.04
+FROM --platform=$BUILDPLATFORM registry.cloud.rt.nyu.edu/sw77/cuda
 
 # Install Python and other dependencies
 RUN apt-get update -y &&  \

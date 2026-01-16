@@ -1,52 +1,50 @@
+# FROM nvidia/cuda:12.8.0-devel-ubuntu22.04
 FROM registry.cloud.rt.nyu.edu/sw77/cuda:12.6.3-ubuntu-22.04-20250103
 
-# Install Python and other dependencies
-RUN apt-get update -y &&  \
-    apt-get install -y python3.10 python3-venv espeak-ng espeak-ng-data git libsndfile1 curl ffmpeg g++ &&  \
-    apt-get clean && rm -rf /var/lib/apt/lists/* && \
-    mkdir -p /usr/share/espeak-ng-data &&  \
-    ln -s /usr/lib/*/espeak-ng-data/* /usr/share/espeak-ng-data/ && \
-    curl -LsSf https://astral.sh/uv/install.sh | sh && \
-    mv /root/.local/bin/uv /usr/local/bin/ && \
-    mv /root/.local/bin/uvx /usr/local/bin/ && \
-    mkdir -p /app/api/src/models/v1_0 && \
-    chgrp -R 0 /app && chmod -R g=u /app
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6+PTX"
+
+# ---- OpenShift-friendly cache locations (prevents writes to /.cache) ----
+ENV XDG_CACHE_HOME=/tmp/.cache
+ENV UV_CACHE_DIR=/tmp/uv-cache
+ENV PIP_CACHE_DIR=/tmp/pip-cache
 
 WORKDIR /app
 
-# Copy dependency files
-COPY pyproject.toml ./pyproject.toml
+# Install system dependencies, including libglib2.0-0 needed by cv2
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3 python3-dev python3-pip python3-venv python3-distutils \
+        build-essential cmake ninja-build git curl \
+        libglib2.0-0 libsm6 libxext6 libxrender1 libgl1 \
+    && ln -s /usr/bin/python3 /usr/bin/python \
+    && ln -sf /usr/bin/pip3 /usr/bin/pip \
+    && python3 -m pip install --upgrade pip setuptools wheel \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies with GPU extras
-RUN uv venv --python 3.10 && \
-    uv sync --extra gpu --no-cache
+# ---- Permissions for random UID on OpenShift ----
+# Make /app and /tmp writable for arbitrary UIDs (via group 0)
+RUN mkdir -p /tmp/.cache /tmp/uv-cache /tmp/pip-cache /app \
+ && chgrp -R 0 /app /tmp \
+ && chmod -R g=u /app /tmp
 
-# Copy project files including models
-COPY api ./api
-COPY web ./web
-COPY docker/scripts/ ./
-RUN chmod +x ./entrypoint.sh
+# Copy code
+COPY . .
 
-# Re-apply group perms after COPY (since --chown was removed)
-RUN chgrp -R 0 /app && chmod -R g=u /app
+# Install Python dependencies
+RUN python3 -m pip install --no-cache-dir numpy
+RUN python3 -m pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+RUN python3 -m pip install --no-cache-dir opencv-python-headless
 
-# Set all environment variables in one go
-ENV PATH="/app/.venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app:/app/api \
-    UV_LINK_MODE=copy \
-    USE_GPU=true \
-    PHONEMIZER_ESPEAK_PATH=/usr/bin \
-    PHONEMIZER_ESPEAK_DATA=/usr/share/espeak-ng-data \
-    ESPEAK_DATA_PATH=/usr/share/espeak-ng-data \
-    DEVICE="gpu"
+# Editable install
+RUN python3 -m pip install --no-cache-dir -e .
 
-ENV DOWNLOAD_MODEL=true
+# Install FastAPI & Uvicorn
+RUN python3 -m pip install --no-cache-dir fastapi uvicorn python-multipart
 
-# Download model if enabled
-RUN if [ "$DOWNLOAD_MODEL" = "true" ]; then \
-    python download_model.py --output api/src/models/v1_0; \
-    fi
+WORKDIR /app/server
+EXPOSE 4040
 
-# Run FastAPI server through entrypoint.sh
-CMD ["./entrypoint.sh"]
+# NOTE: --reload is typically not used in production containers.
+# CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "4040"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "4040"]
